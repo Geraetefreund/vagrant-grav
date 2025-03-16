@@ -1,0 +1,4 @@
+.congig/*
+.vagrant/*
+grav/*
+!grav/.gitkeep
