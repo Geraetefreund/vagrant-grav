@@ -82,5 +82,4 @@ echo "${VHOST}" > /etc/apache2/sites-available/000-default-ssl.conf
 
 # Enable the SSL site and restart Apache
 a2ensite 000-default-ssl
-systemctl restart apache2
-
+systemctl restart apache2.service
