@@ -9,9 +9,9 @@ IP_ADDRESS = "192.168.56.78"
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-22.04"
   config.vm.provision :shell, path: "bootstrap.sh"
-   config.vm.network "private_network", ip: IP_ADDRESS
-   config.vm.synced_folder ".", "/vagrant", :owner =>"www-data"
-   config.vm.provider "virtualbox" do |vb|
+  config.vm.network "private_network", ip: IP_ADDRESS
+  config.vm.synced_folder ".", "/vagrant", :owner =>"www-data"
+  config.vm.provider "virtualbox" do |vb|
      vb.memory = "4096"
    end
    

@@ -1,35 +1,41 @@
-#! /bin/bash
+#!/bin/bash
+#
+# Provisioning File for Vagrant using Apache2 and Grav
+# Version 1.0 (2025-03-16)
 
-# Provisioning File for vagrant using apache2 and grav
-# version 0.5 (2025-03-15)
-# PHP8.3 for Grav >1.7
-# neovim
-# added support for page-stats plugin, needs database
-
-# Repositories
-add-apt-repository ppa:ondrej/php
-add-apt-repository ppa:ondrej/apache2
+# Add Repositories
+add-apt-repository -y ppa:ondrej/php
+add-apt-repository -y ppa:ondrej/apache2
 add-apt-repository ppa:neovim-ppa/unstable
+
 
 # Install Apache and modules required to run Grav
 apt update
-apt install -y apache2
-a2enmod rewrite
+apt install -y apache2 openssl
+a2enmod rewrite ssl
 
-# Install PHP and modules required to run Grav
-apt -y install php8.3 libapache2-mod-php8.3
+# Install PHP 8.3 and modules required for Grav
+apt install -y php8.3 libapache2-mod-php8.3
 systemctl restart apache2.service
-apt -y install php8.3-mbstring php8.3-gd php8.3-curl php8.3-xml
-apt -y install php8.3-zip php8.3-opcache php8.3-apcu
-apt -y install php8.3-yaml php8.3-xdebug
+apt install -y php8.3-mbstring php8.3-gd php8.3-curl php8.3-xml php8.3-zip
+apt install -y php8.3-opcache php8.3-apcu php8.3-yaml php8.3-xdebug 
 
-# Admin Page wouldn't load into Dashboard
+# Grav Admin Page wouldn't load into Dashboard
 # workaround: call admin/themes/ and it worked
 # Page-Stats Plugin was the problem.
-apt -y install php8.3-sqlite3 php8.3-mysql
+apt install -y php8.3-sqlite3 php8.3-mysql
 phpenmod pdo pdo_sqlite pdo_mysql
 
-# Install Ruby and build essentials
+# Generate Self-Signed SSL Certificate
+SSL_DIR="/etc/apache2/ssl"
+mkdir -p "$SSL_DIR"
+
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout "$SSL_DIR/apache-selfsigned.key" \
+    -out "$SSL_DIR/apache-selfsigned.crt" \
+    -subj "/C=UK/ST=NONE/L=Barmytown/O=GravDev/OU=IT/CN=192.168.56.78"
+
+# Install Ruby and build-essentrials
 apt -y install ruby-full build-essential ruby
 gem install sass
 
@@ -46,31 +52,35 @@ tar xfz /vagrant/nvim-cfg.tgz -C /home/vagrant
 # Copy tmux config 
 cp /vagrant/.tmux.conf /home/vagrant
 
-# Install SSH public key   WHY???
-#cat /vagrant/id_rsa.pub >> /home/vagrant/.ssh/authorized_keys
-
 # Link local grav files to VM apache
 if ! [ -L /var/www/html ]; then
   rm -rf /var/www/html
   ln -fs /vagrant/grav /var/www/html
 fi
 
-# Install virtual host config
+# Set Up Apache Virtual Host for HTTPS
 VHOST=$(cat <<EOF
-<VirtualHost *:80>
-  DocumentRoot /var/www/html
+<VirtualHost *:443>
+    DocumentRoot /var/www/html
+    ServerName 192.168.56.78
 
-  <Directory /var/www/html>
-    AllowOverride All
-    Require all granted
-  </Directory>
+    SSLEngine on
+    SSLCertificateFile "$SSL_DIR/apache-selfsigned.crt"
+    SSLCertificateKeyFile "$SSL_DIR/apache-selfsigned.key"
 
-  ErrorLog /var/log/apache2/error.log
-  CustomLog /var/log/apache2/access.log combined
+    <Directory /var/www/html>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog /var/log/apache2/error.log
+    CustomLog /var/log/apache2/access.log combined
 </VirtualHost>
 EOF
 )
-echo "${VHOST}" > /etc/apache2/sites-available/000-default.conf
+echo "${VHOST}" > /etc/apache2/sites-available/000-default-ssl.conf
 
-# Restart Apache one final time to pick up config changes
-systemctl restart apache2.service
+# Enable the SSL site and restart Apache
+a2ensite 000-default-ssl
+systemctl restart apache2
+
